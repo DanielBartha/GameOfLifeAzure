@@ -3,7 +3,7 @@ const app = express();
 const appInsights = require('applicationinsights');
 
 // Setup Application Insights
-appInsights.setup('YOUR_INSTRUMENTATION_KEY').start();
+appInsights.setup('InstrumentationKey=64eb3960-7db4-47fe-a824-5948f9946969;IngestionEndpoint=https://eastus-8.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus.livediagnostics.monitor.azure.com/;ApplicationId=a42788e4-2239-470c-b7ff-71d8656079a6').start();
 const client = appInsights.defaultClient;
 
 // Serve static files
