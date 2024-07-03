@@ -1,18 +1,53 @@
+require('dotenv').config();
+
 const express = require('express');
 const app = express();
 const path = require('path');
+const multer = require('multer');
+const { BlobServiceClient } = require('@azure/storage-blob');
+const stream = require('stream');
 
 // Application Insights
 const appInsights = require('applicationinsights');
-appInsights.setup('InstrumentationKey=64eb3960-7db4-47fe-a824-5948f9946969;IngestionEndpoint=https://eastus-8.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus.livediagnostics.monitor.azure.com/;ApplicationId=a42788e4-2239-470c-b7ff-71d8656079a6').start();
+const instrumentationKey = process.env.APPLICATION_INSIGHTS_INSTRUMENTATION_KEY;
+
+if (instrumentationKey) {
+    appInsights.setup(instrumentationKey).start();
+} else {
+    console.error('No instrumentation key found in environment variables.');
+}
+
 const client = appInsights.defaultClient;
+
+const upload = multer();
 
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.post('/save-canvas', upload.single('canvasImage'), async (req, res) => {
+    try {
+        const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
+        const containerClient = blobServiceClient.getContainerClient(process.env.AZURE_STORAGE_CONTAINER_NAME);
+        const blobName = `gameOfLife-${Date.now()}.png`;
+        const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+        const bufferStream = new stream.PassThrough();
+        bufferStream.end(req.file.buffer);
+
+        await blockBlobClient.uploadStream(bufferStream, req.file.buffer.length, 5);
+
+        res.json({ message: 'Image uploaded successfully', blobName: blobName });
+    } catch (error) {
+        console.error('Error uploading image:', error);
+        res.status(500).json({ error: 'Failed to upload image' });
+    }
+});
+
 // Example route to track a custom event
 app.get('/track-event', (req, res) => {
-    client.trackEvent({ name: 'CustomEvent', properties: { customProperty: 'customValue' } });
+    if (client) {
+        client.trackEvent({ name: 'CustomEvent', properties: { customProperty: 'customValue' } });
+    }
     res.send('Event tracked');
 });
 
@@ -25,5 +60,7 @@ app.get('/', (req, res) => {
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
-    client.trackEvent({ name: 'ServerStarted', properties: { port: port } });
+    if (client) {
+        client.trackEvent({ name: 'ServerStarted', properties: { port: port } });
+    }
 });
